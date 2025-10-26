@@ -1,0 +1,177 @@
+class Cliente:
+    def __init__(self, nome, cpf, data_nascimento):
+        self.nome = nome
+        self.cpf = cpf
+        self.data_nascimento = data_nascimento
+
+    def __str__(self):
+        return f"{self.nome} (CPF: {self.cpf}, Nasc: {self.data_nascimento})"
+
+
+class Conta:
+    def __init__(self, cliente, numero):
+        self.cliente = cliente
+        self.numero = numero
+        self.saldo = 0.0
+        self.extrato = []
+        self.limite = 500.0
+        self.numero_saques = 0
+        self.limite_saques = 3
+
+    def depositar(self, valor):
+        if valor <= 0:
+            return False, "Valor inválido para depósito."
+        self.saldo += valor
+        self.extrato.append(f"Depósito: R$ {valor:.2f}")
+        return True, "Depósito realizado com sucesso."
+
+    def sacar(self, valor):
+        if valor <= 0:
+            return False, "Valor inválido para saque."
+        if valor > self.saldo:
+            return False, "Saldo insuficiente."
+        if valor > self.limite:
+            return False, f"Saque excede o limite de R$ {self.limite:.2f}."
+        if self.numero_saques >= self.limite_saques:
+            return False, "Número máximo de saques diários atingido."
+        self.saldo -= valor
+        self.extrato.append(f"Saque: R$ {valor:.2f}")
+        self.numero_saques += 1
+        return True, "Saque realizado com sucesso."
+
+    def mostrar_extrato(self):
+        if not self.extrato:
+            return "Nenhuma movimentação realizada."
+        return "\n".join(self.extrato) + f"\nSaldo atual: R$ {self.saldo:.2f}"
+
+    def reset_saques(self):
+        self.numero_saques = 0  # Pode ser usado para resetar o contador diariamente
+
+
+class Banco:
+    def __init__(self):
+        self.clientes = []
+        self.contas = []
+        self.numero_conta_seq = 1
+
+    def cadastrar_cliente(self, nome, cpf, data_nascimento):
+        if self.buscar_cliente(cpf):
+            return False, "Cliente com este CPF já cadastrado."
+        cliente = Cliente(nome, cpf, data_nascimento)
+        self.clientes.append(cliente)
+        return True, "Cliente cadastrado com sucesso."
+
+    def buscar_cliente(self, cpf):
+        for cliente in self.clientes:
+            if cliente.cpf == cpf:
+                return cliente
+        return None
+
+    def criar_conta(self, cpf):
+        cliente = self.buscar_cliente(cpf)
+        if not cliente:
+            return False, "Cliente não encontrado. Cadastre o cliente antes de criar a conta."
+        conta = Conta(cliente, self.numero_conta_seq)
+        self.contas.append(conta)
+        self.numero_conta_seq += 1
+        return True, f"Conta criada com sucesso. Número da conta: {conta.numero}"
+
+    def buscar_conta(self, numero_conta):
+        for conta in self.contas:
+            if conta.numero == numero_conta:
+                return conta
+        return None
+
+    def listar_contas(self):
+        if not self.contas:
+            return "Nenhuma conta cadastrada."
+        resultado = ""
+        for conta in self.contas:
+            resultado += f"Conta {conta.numero} - Cliente: {conta.cliente.nome} - Saldo: R$ {conta.saldo:.2f}\n"
+        return resultado
+
+
+def menu():
+    print("""
+=== Banco TechDreams ===
+1 - Cadastrar Cliente
+2 - Criar Conta
+3 - Depositar
+4 - Sacar
+5 - Extrato
+6 - Listar Contas
+7 - Sair
+""")
+
+
+def main():
+    banco = Banco()
+
+    while True:
+        menu()
+        opcao = input("Escolha uma opção: ")
+
+        if opcao == "1":
+            nome = input("Nome do cliente: ")
+            cpf = input("CPF do cliente: ")
+            data_nasc = input("Data de nascimento (DD/MM/AAAA): ")
+            sucesso, msg = banco.cadastrar_cliente(nome, cpf, data_nasc)
+            print(msg)
+
+        elif opcao == "2":
+            cpf = input("CPF do cliente para criar conta: ")
+            sucesso, msg = banco.criar_conta(cpf)
+            print(msg)
+
+        elif opcao == "3":
+            try:
+                numero = int(input("Número da conta para depósito: "))
+                conta = banco.buscar_conta(numero)
+                if not conta:
+                    print("Conta não encontrada.")
+                    continue
+                valor = float(input("Valor para depósito: R$ "))
+                sucesso, msg = conta.depositar(valor)
+                print(msg)
+            except ValueError:
+                print("Entrada inválida. Tente novamente.")
+
+        elif opcao == "4":
+            try:
+                numero = int(input("Número da conta para saque: "))
+                conta = banco.buscar_conta(numero)
+                if not conta:
+                    print("Conta não encontrada.")
+                    continue
+                valor = float(input("Valor para saque: R$ "))
+                sucesso, msg = conta.sacar(valor)
+                print(msg)
+            except ValueError:
+                print("Entrada inválida. Tente novamente.")
+
+        elif opcao == "5":
+            try:
+                numero = int(input("Número da conta para extrato: "))
+                conta = banco.buscar_conta(numero)
+                if not conta:
+                    print("Conta não encontrada.")
+                    continue
+                print("\n=== Extrato ===")
+                print(conta.mostrar_extrato())
+            except ValueError:
+                print("Entrada inválida. Tente novamente.")
+
+        elif opcao == "6":
+            print("\n=== Contas Cadastradas ===")
+            print(banco.listar_contas())
+
+        elif opcao == "7":
+            print("Obrigado por usar o Banco TechDreams. Até logo!")
+            break
+
+        else:
+            print("Opção inválida. Tente novamente.")
+
+
+if __name__ == "__main__":
+    main()
