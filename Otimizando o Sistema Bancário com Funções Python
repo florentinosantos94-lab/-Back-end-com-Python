@@ -1,0 +1,176 @@
+import tkinter as tk
+from tkinter import messagebox
+
+class Conta:
+    def __init__(self, cpf, senha):
+        self.cpf = cpf
+        self.senha = senha
+        self.saldo = 0.0
+        self.extrato = []
+        self.limite = 500.0
+        self.numero_saques = 0
+        self.limite_saques = 3
+
+    def depositar(self, valor):
+        if valor > 0:
+            self.saldo += valor
+            self.extrato.append(f"Depósito: R$ {valor:.2f}")
+            return True, "Depósito realizado com sucesso."
+        else:
+            return False, "Valor de depósito inválido."
+
+    def sacar(self, valor):
+        if valor <= 0:
+            return False, "Valor de saque inválido."
+        elif valor > self.saldo:
+            return False, "Saldo insuficiente."
+        elif valor > self.limite:
+            return False, f"Valor do saque excede o limite de R$ {self.limite:.2f}."
+        elif self.numero_saques >= self.limite_saques:
+            return False, "Número máximo de saques diários atingido."
+        else:
+            self.saldo -= valor
+            self.extrato.append(f"Saque: R$ {valor:.2f}")
+            self.numero_saques += 1
+            return True, "Saque realizado com sucesso."
+
+    def mostrar_extrato(self):
+        if not self.extrato:
+            return "Nenhuma movimentação realizada."
+        return "\n".join(self.extrato) + f"\nSaldo atual: R$ {self.saldo:.2f}"
+
+class Banco:
+    def __init__(self):
+        self.contas = {}
+
+    def criar_conta(self, cpf, senha):
+        if cpf in self.contas:
+            return False, "Conta já existe para este CPF."
+        self.contas[cpf] = Conta(cpf, senha)
+        return True, "Conta criada com sucesso."
+
+    def autenticar(self, cpf, senha):
+        conta = self.contas.get(cpf)
+        if conta and conta.senha == senha:
+            return conta
+        return None
+
+# Interface gráfica com Tkinter
+class Aplicacao:
+    def __init__(self, banco):
+        self.banco = banco
+        self.conta_atual = None
+
+        self.root = tk.Tk()
+        self.root.title("Sistema Bancário")
+
+        self.frame_login = tk.Frame(self.root)
+        self.frame_banco = tk.Frame(self.root)
+
+        self.setup_login()
+        self.frame_login.pack()
+
+        self.root.mainloop()
+
+    def setup_login(self):
+        tk.Label(self.frame_login, text="CPF:").grid(row=0, column=0, pady=5)
+        self.entry_cpf = tk.Entry(self.frame_login)
+        self.entry_cpf.grid(row=0, column=1, pady=5)
+
+        tk.Label(self.frame_login, text="Senha:").grid(row=1, column=0, pady=5)
+        self.entry_senha = tk.Entry(self.frame_login, show="*")
+        self.entry_senha.grid(row=1, column=1, pady=5)
+
+        tk.Button(self.frame_login, text="Entrar", command=self.login).grid(row=2, column=0, columnspan=2, pady=10)
+        tk.Button(self.frame_login, text="Criar Conta", command=self.criar_conta).grid(row=3, column=0, columnspan=2)
+
+    def login(self):
+        cpf = self.entry_cpf.get()
+        senha = self.entry_senha.get()
+        conta = self.banco.autenticar(cpf, senha)
+        if conta:
+            self.conta_atual = conta
+            messagebox.showinfo("Sucesso", "Login realizado com sucesso!")
+            self.frame_login.pack_forget()
+            self.setup_banco()
+            self.frame_banco.pack()
+        else:
+            messagebox.showerror("Erro", "CPF ou senha inválidos.")
+
+    def criar_conta(self):
+        cpf = self.entry_cpf.get()
+        senha = self.entry_senha.get()
+        if not cpf or not senha:
+            messagebox.showwarning("Aviso", "Informe CPF e senha para criar conta.")
+            return
+        sucesso, msg = self.banco.criar_conta(cpf, senha)
+        if sucesso:
+            messagebox.showinfo("Sucesso", msg)
+        else:
+            messagebox.showerror("Erro", msg)
+
+    def setup_banco(self):
+        for widget in self.frame_banco.winfo_children():
+            widget.destroy()
+
+        tk.Label(self.frame_banco, text=f"Bem-vindo, CPF: {self.conta_atual.cpf}").grid(row=0, column=0, columnspan=2, pady=10)
+
+        tk.Button(self.frame_banco, text="Depositar", command=self.janela_deposito).grid(row=1, column=0, pady=5)
+        tk.Button(self.frame_banco, text="Sacar", command=self.janela_saque).grid(row=1, column=1, pady=5)
+        tk.Button(self.frame_banco, text="Extrato", command=self.mostrar_extrato).grid(row=2, column=0, pady=5)
+        tk.Button(self.frame_banco, text="Sair", command=self.sair).grid(row=2, column=1, pady=5)
+
+    def janela_deposito(self):
+        self.janela_operacao("Depósito", self.realizar_deposito)
+
+    def janela_saque(self):
+        self.janela_operacao("Saque", self.realizar_saque)
+
+    def janela_operacao(self, titulo, comando):
+        janela = tk.Toplevel(self.root)
+        janela.title(titulo)
+        tk.Label(janela, text=f"Valor do {titulo.lower()}:").pack(pady=5)
+        entrada_valor = tk.Entry(janela)
+        entrada_valor.pack(pady=5)
+        def executar():
+            try:
+                valor = float(entrada_valor.get())
+                sucesso, msg = comando(valor)
+                if sucesso:
+                    messagebox.showinfo(titulo, msg)
+                    janela.destroy()
+                else:
+                    messagebox.showerror(titulo, msg)
+            except ValueError:
+                messagebox.showerror(titulo, "Por favor, insira um valor numérico válido.")
+        tk.Button(janela, text="Confirmar", command=executar).pack(pady=5)
+
+    def realizar_deposito(self, valor):
+        return self.conta_atual.depositar(valor)
+
+    def realizar_saque(self, valor):
+        return self.conta_atual.sacar(valor)
+
+    def mostrar_extrato(self):
+        extrato = self.conta_atual.mostrar_extrato()
+        messagebox.showinfo("Extrato", extrato)
+
+    def sair(self):
+        self.conta_atual = None
+        self.frame_banco.pack_forget()
+        self.entry_cpf.delete(0, tk.END)
+        self.entry_senha.delete(0, tk.END)
+        self.frame_login.pack()
+
+if __name__ == "__main__":
+    banco = Banco()
+    Aplicacao(banco)
+
+
+
+Como funciona:
+Classe Conta: representa cada conta bancária, com saldo, extrato, limites e métodos para depósito e saque.
+Classe Banco: gerencia múltiplas contas, permitindo criar e autenticar contas.
+Classe Aplicacao: interface gráfica com Tkinter para login, criação de conta e operações bancárias.
+Autenticação: Usuário entra com CPF e senha para acessar sua conta.
+Interface gráfica: Janela para login, criação de conta, e após login, botões para depósito, saque, extrato e logout.
