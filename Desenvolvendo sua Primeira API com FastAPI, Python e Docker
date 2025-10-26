@@ -1,0 +1,106 @@
+python
+
+Executar
+
+from fastapi import FastAPI, HTTPException, Query, Depends, status
+from fastapi_pagination import Page, add_pagination, paginate, Params
+from fastapi_pagination.bases import AbstractPage
+from pydantic import BaseModel, constr
+from sqlalchemy import Column, Integer, String, create_engine, exc
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+import sqlalchemy.exc
+
+# Configurações do banco (ajuste a string de conexão conforme seu ambiente)
+DATABASE_URL = "postgresql+psycopg2://user:password@localhost:5432/workoutdb"
+
+engine = create_engine(DATABASE_URL, echo=True)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+Base = declarative_base()
+
+app = FastAPI(title="WorkoutAPI")
+
+# Modelo SQLAlchemy
+class Atleta(Base):
+    __tablename__ = "atletas"
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, index=True)
+    cpf = Column(String, unique=True, index=True)
+    centro_treinamento = Column(String)
+    categoria = Column(String)
+
+# Pydantic Schemas
+class AtletaBase(BaseModel):
+    nome: str
+    cpf: constr(min_length=11, max_length=11)  # CPF com 11 caracteres (simplificado)
+    centro_treinamento: str
+    categoria: str
+
+class AtletaCreate(AtletaBase):
+    pass
+
+class AtletaResponse(BaseModel):
+    nome: str
+    centro_treinamento: str
+    categoria: str
+
+    class Config:
+        orm_mode = True
+
+# Dependency para obter sessão do banco
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Endpoint para criar atleta com tratamento de IntegrityError
+@app.post("/atletas/", response_model=AtletaResponse, status_code=status.HTTP_201_CREATED)
+async def criar_atleta(atleta: AtletaCreate, db: Session = Depends(get_db)):
+    novo_atleta = Atleta(**atleta.dict())
+    db.add(novo_atleta)
+    try:
+        db.commit()
+        db.refresh(novo_atleta)
+        return novo_atleta
+    except exc.IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=303,
+            detail=f"Já existe um atleta cadastrado com o cpf: {atleta.cpf}"
+        )
+
+# Endpoint GET all com query params e paginação
+@app.get("/atletas/", response_model=Page[AtletaResponse])
+async def listar_atletas(
+    nome: str | None = Query(None, description="Filtrar por nome do atleta"),
+    cpf: str | None = Query(None, description="Filtrar por CPF do atleta"),
+    params: Params = Depends(),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Atleta)
+
+    if nome:
+        query = query.filter(Atleta.nome.ilike(f"%{nome}%"))
+    if cpf:
+        query = query.filter(Atleta.cpf == cpf)
+
+    atletas = query.all()
+    return paginate(atletas, params)
+
+# Inicializa paginação
+add_pagination(app)
+Como funciona:
+Query Parameters: nome e cpf são opcionais e filtram os atletas na consulta.
+Resposta customizada: O modelo AtletaResponse retorna só os campos solicitados.
+Tratamento de exceção: Se tentar criar um atleta com CPF já existente, retorna HTTP 303 com mensagem clara.
+Paginação: Usamos fastapi-pagination para limitar e paginar resultados, com limit e offset automáticos via query params.
+Dependências importantes (instale com pip):
+bash
+
+pip install fastapi uvicorn sqlalchemy psycopg2-binary pydantic fastapi-pagination
+Para rodar a API:
+bash
+
+uvicorn your_module_name:app --reload
